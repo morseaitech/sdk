@@ -16,7 +16,7 @@ MORSE uses **wallet signature authentication** - you sign a message with your Et
 For frontend applications using browser wallets:
 
 ```typescript
-import { MorseSDK, createBrowserWallet, Expiration } from "@morse/sdk";
+import { MorseSDK, createBrowserWallet, Expiration } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -42,7 +42,7 @@ const signal = await sdk.createSignalEncrypted(wallet, {
 For backend applications with a private key:
 
 ```typescript
-import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morse/sdk";
+import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -71,7 +71,7 @@ const signal = await sdk.createSignalEncrypted(wallet, {
 For one-time operations where you already have a signature:
 
 ```typescript
-import { MorseSDK, createWalletFromPreSigned, Expiration } from "@morse/sdk";
+import { MorseSDK, createWalletFromPreSigned, Expiration } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -102,7 +102,7 @@ const signal = await sdk.createSignalEncrypted(wallet, {
 For custom wallet integrations (mobile wallets, hardware wallets, etc.):
 
 ```typescript
-import { MorseSDK, type WalletAuth, Expiration } from "@morse/sdk";
+import { MorseSDK, type WalletAuth, Expiration } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -158,7 +158,7 @@ MORSE: {action} {context} at {timestamp}
 Authentication errors are thrown as specific error types:
 
 ```typescript
-import { WalletNotAllowedError, ValidationError } from "@morse/sdk";
+import { WalletNotAllowedError, ValidationError } from "@morseai/sdk";
 
 try {
   const signal = await sdk.openSignal(wallet, signalId);
@@ -176,7 +176,7 @@ try {
 ### Frontend (React)
 
 ```typescript
-import { MorseSDK, createBrowserWallet, Expiration, type WalletAuth } from "@morse/sdk";
+import { MorseSDK, createBrowserWallet, Expiration, type WalletAuth } from "@morseai/sdk";
 import { useState } from "react";
 
 function MyComponent() {
@@ -222,7 +222,7 @@ function MyComponent() {
 ### Backend (Node.js)
 
 ```typescript
-import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morse/sdk";
+import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,

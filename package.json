@@ -1,6 +1,6 @@
 {
-  "name": "@morse/sdk",
-  "version": "0.1.0-beta.1",
+  "name": "@morseai/sdk",
+  "version": "0.1.0-beta.4",
   "description": "MORSE SDK - TypeScript SDK for creating and accessing encrypted signals",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -22,17 +22,34 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./publish.ps1"
   },
   "keywords": [
     "morse",
     "encryption",
     "signals",
     "privacy",
-    "crypto"
+    "crypto",
+    "end-to-end-encryption",
+    "wallet",
+    "ethereum",
+    "zero-knowledge",
+    "ephemeral",
+    "secure-messaging",
+    "x25519",
+    "xchacha20-poly1305"
   ],
-  "author": "",
+  "author": "MORSE Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morseaitech/sdk.git"
+  },
+  "homepage": "https://morseai.tech",
+  "bugs": {
+    "url": "https://github.com/morseaitech/sdk/issues"
+  },
   "dependencies": {
     "ethers": "^6.0.0",
     "libsodium-wrappers": "^0.7.16"
@@ -45,5 +62,8 @@
   },
   "peerDependencies": {
     "ethers": "^6.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

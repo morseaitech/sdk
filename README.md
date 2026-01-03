@@ -2,7 +2,7 @@
 
 TypeScript SDK for creating and accessing encrypted signals in the MORSE platform.
 
-**Version:** 0.1.0-beta.1 (Beta Release)
+**Version:** 0.1.0-beta.4 (Beta Release)
 
 > ⚠️ **Beta Notice**: This is a beta release. The API is stable but may have minor changes before the 1.0.0 release. Please report any issues you encounter.
 
@@ -21,11 +21,11 @@ TypeScript SDK for creating and accessing encrypted signals in the MORSE platfor
 ## Installation
 
 ```bash
-npm install @morse/sdk
+npm install @morseai/sdk
 # or
-pnpm add @morse/sdk
+pnpm add @morseai/sdk
 # or
-yarn add @morse/sdk
+yarn add @morseai/sdk
 ```
 
 ## Prerequisites
@@ -49,7 +49,7 @@ MORSE uses **wallet signature authentication** - you sign a message with your Et
 ## Quick Start
 
 ```typescript
-import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morse/sdk";
+import { MorseSDK, createWalletFromPrivateKey, Expiration } from "@morseai/sdk";
 
 // Initialize SDK (only apiKey is required)
 const sdk = new MorseSDK({
@@ -82,7 +82,7 @@ console.log("Message:", decrypted.message);
 ### Basic Setup
 
 ```typescript
-import { MorseSDK } from "@morse/sdk";
+import { MorseSDK } from "@morseai/sdk";
 
 // Simple initialization (only apiKey is required)
 const sdk = new MorseSDK({
@@ -125,7 +125,7 @@ The SDK supports multiple ways to authenticate, depending on your use case:
 ### 1. Browser/Web3 Wallet (Frontend)
 
 ```typescript
-import { MorseSDK, createBrowserWallet } from "@morse/sdk";
+import { MorseSDK, createBrowserWallet } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -138,7 +138,7 @@ const wallet = await createBrowserWallet(window.ethereum);
 ### 2. Private Key (Backend/Server)
 
 ```typescript
-import { MorseSDK, createWalletFromPrivateKey } from "@morse/sdk";
+import { MorseSDK, createWalletFromPrivateKey } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -153,7 +153,7 @@ const wallet = createWalletFromPrivateKey({
 ### 3. Custom Implementation
 
 ```typescript
-import { MorseSDK, type WalletAuth } from "@morse/sdk";
+import { MorseSDK, type WalletAuth } from "@morseai/sdk";
 
 const sdk = new MorseSDK({
   apiKey: process.env.MORSE_API_KEY!,
@@ -176,7 +176,7 @@ const wallet: WalletAuth = {
 The SDK can handle encryption automatically. This is the recommended approach:
 
 ```typescript
-import { MorseSDK, Expiration } from "@morse/sdk";
+import { MorseSDK, Expiration } from "@morseai/sdk";
 
 // Create a private signal (AES-GCM, key in URL)
 const privateSignal = await sdk.createSignalEncrypted(wallet, {
@@ -214,7 +214,7 @@ You can specify expiration in two ways:
 #### Option 1: Relative Time (`expiresIn`)
 
 ```typescript
-import { Expiration } from "@morse/sdk";
+import { Expiration } from "@morseai/sdk";
 
 await sdk.createSignalEncrypted(wallet, {
   mode: "shared_wallet",
@@ -370,7 +370,7 @@ import {
   ValidationError,
   NetworkError,
   RateLimitError,
-} from "@morse/sdk";
+} from "@morseai/sdk";
 
 try {
   const signal = await sdk.openSignalDecrypted(wallet, signalId);
@@ -538,9 +538,9 @@ import type {
   WalletAuth,
   MorseSDKConfig,
   ExpirationValue,
-} from "@morse/sdk";
+} from "@morseai/sdk";
 
-import { Expiration } from "@morse/sdk";
+import { Expiration } from "@morseai/sdk";
 ```
 
 ## Helper Functions
@@ -548,7 +548,7 @@ import { Expiration } from "@morse/sdk";
 ### Signal Validation
 
 ```typescript
-import { isValidSignalId, isValidWalletAddress } from "@morse/sdk";
+import { isValidSignalId, isValidWalletAddress } from "@morseai/sdk";
 
 isValidSignalId("abc123"); // true
 isValidWalletAddress("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"); // true
@@ -562,7 +562,7 @@ import {
   isSignalExpired,
   getTimeUntilExpiration,
   parseExpiresIn,
-} from "@morse/sdk";
+} from "@morseai/sdk";
 
 formatExpiration("2025-12-31T23:59:59Z");
 isSignalExpired("2025-12-31T23:59:59Z");
@@ -573,7 +573,7 @@ parseExpiresIn("24h");
 ### Expiration Constants
 
 ```typescript
-import { Expiration } from "@morse/sdk";
+import { Expiration } from "@morseai/sdk";
 
 // Use constants for autocomplete and type safety
 Expiration.ONE_DAY    // "24h"
