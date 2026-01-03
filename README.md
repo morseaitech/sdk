@@ -1,8 +1,12 @@
 # MORSE SDK
 
+[![npm version](https://badge.fury.io/js/%40morseai%2Fsdk.svg)](https://badge.fury.io/js/%40morseai%2Fsdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
+
 TypeScript SDK for creating and accessing encrypted signals in the MORSE platform.
 
-**Version:** 0.1.0-beta.4 (Beta Release)
+**Version:** 0.1.0-beta.5 (Beta Release)
 
 > ⚠️ **Beta Notice**: This is a beta release. The API is stable but may have minor changes before the 1.0.0 release. Please report any issues you encounter.
 
