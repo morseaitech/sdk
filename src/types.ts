@@ -111,7 +111,7 @@ export interface CreateSignalResponse {
 }
 
 export interface CreateSignalResponseEncrypted extends CreateSignalResponse {
-  keyBase64: string;
+  keyBase64?: string; // Optional: user should store locally when creating signal
   shareableLink: string;
 }
 

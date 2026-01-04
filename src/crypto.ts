@@ -230,8 +230,10 @@ export async function deriveKeyFromWallet(
 export function generateShareableLink(
     baseUrl: string,
     signalId: string,
-    keyBase64: string
+    keyBase64?: string
 ): string {
-    return `${baseUrl}/view/${signalId}#k=${encodeURIComponent(keyBase64)}`;
+    // Security: Don't include key in URL fragment
+    // Key should be distributed separately through a secure channel
+    return `${baseUrl}/view/${signalId}`;
 }
 

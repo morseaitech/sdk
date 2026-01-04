@@ -725,11 +725,10 @@ export class MorseSDKV1 implements MorseContractV1 {
     };
 
     const result = await this.createSignal(wallet, signalOptions);
-    const shareableLink = generateShareableLink(FRONTEND_BASE_URL, result.signalId, keyBase64);
+    const shareableLink = generateShareableLink(FRONTEND_BASE_URL, result.signalId);
 
     return {
       ...result,
-      keyBase64,
       shareableLink,
     };
   }
@@ -741,10 +740,8 @@ export class MorseSDKV1 implements MorseContractV1 {
     const walletTarget = options.walletTarget!;
     const walletCreator = wallet.address;
 
-    // Generate signal ID upfront (needed for encryption)
     const signalId = options.signalId || generateSignalId();
 
-    // Calculate expiration
     let expiresAtMs: number;
     if (options.expiresAt) {
       expiresAtMs = new Date(options.expiresAt).getTime();
@@ -759,7 +756,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       expiresAtMs = Date.now() + 24 * 60 * 60 * 1000; // Default 24h
     }
 
-    // Get recipient's public key from registry
     const keyService = new WalletKeyService(API_BASE_URL, this.config.apiKey, this.config.apiVersion || "v1");
     const recipientKeyResponse = await keyService.getPublicKey(walletTarget);
 
@@ -771,26 +767,22 @@ export class MorseSDKV1 implements MorseContractV1 {
       );
     }
 
-    // Verify certificate
     if (!verifyKeyCertificate(recipientKeyResponse.certificate)) {
       throw new Error("Recipient's key certificate signature verification failed");
     }
 
-    // Check expiration
     if (Date.now() > recipientKeyResponse.certificate.expiresAt) {
       throw new Error("Recipient's key certificate has expired");
     }
 
     const recipientPubKey = Buffer.from(recipientKeyResponse.certificate.x25519PublicKey, "base64");
 
-    // Prepare payload
     let payloadText = "";
     if (options.message) {
       payloadText = options.message;
     }
     const payloadBytes = new TextEncoder().encode(payloadText);
 
-    // Create shared signal with X25519 encryption
     const sealedResult = await createSharedSignal(
       payloadBytes,
       new Uint8Array(recipientPubKey),
@@ -803,7 +795,6 @@ export class MorseSDKV1 implements MorseContractV1 {
     let fileOptions: CreateSignalOptions["file"] | undefined;
 
     if (options.file) {
-      // Encrypt file with same mechanism
       const fileBytes = options.file.data instanceof ArrayBuffer
         ? new Uint8Array(options.file.data)
         : new Uint8Array(options.file.data);
@@ -817,7 +808,6 @@ export class MorseSDKV1 implements MorseContractV1 {
         signalId + "_file"
       );
 
-      // Upload encrypted file
       const uploadResult = await this.uploadFile(wallet, {
         file: fileSealedResult.encryptedPayload,
         originalName: options.file.originalName,
@@ -858,13 +848,11 @@ export class MorseSDKV1 implements MorseContractV1 {
 
     const result = await this.createSignal(wallet, signalOptions);
 
-    // For X25519 signals, no key in URL (recipient decrypts with their wallet)
     const shareableLink = `${FRONTEND_BASE_URL}/view/${result.signalId}`;
 
     return {
       ...result,
-      keyBase64: "", // No key needed for X25519 signals
-      shareableLink,
+      shareableLink
     };
   }
 
