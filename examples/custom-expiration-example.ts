@@ -37,8 +37,15 @@ async function example() {
         console.log("\nCreating signal with custom expiration date...");
         console.log("Custom expiration:", customDate.toISOString());
 
+        const walletTarget = process.env.WALLET_TARGET;
+        if (!walletTarget) {
+            console.error("\n❌ Please set WALLET_TARGET environment variable");
+            console.error("   export WALLET_TARGET=0x...");
+            return;
+        }
+
         const result = await sdk.createSignalEncrypted(wallet, {
-            walletTarget: process.env.WALLET_TARGET || "0x0000000000000000000000000000000000000000",
+            walletTarget,
             mode: "shared_wallet",
             message: "This signal expires at a specific date and time! 🕐",
             expiresAt: customDate.toISOString(), // ISO 8601 format

@@ -14,7 +14,6 @@ import type {
 } from "./types";
 import type { MorseContract } from "./contracts/MorseContract";
 import { MorseSDKV1 } from "./implementations/v1/MorseSDKV1";
-import { logger } from "./logger";
 
 export interface MorseSDKCallbacks {
     onRequest?: (url: string, options: RequestInit) => void;
@@ -40,15 +39,9 @@ export class MorseSDK implements MorseContract {
                 this.contract = new MorseSDKV1(config);
                 break;
             default:
-                logger.warn(`Unknown API version: ${this.apiVersion}, defaulting to v1`);
                 this.contract = new MorseSDKV1(config);
                 this.apiVersion = "v1";
         }
-
-        logger.debug("MorseSDK initialized", {
-            apiVersion: this.apiVersion,
-            contractVersion: (this.contract as any).version,
-        });
     }
 
     getConfig(): Readonly<MorseSDKConfig> {

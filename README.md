@@ -6,7 +6,7 @@
 
 TypeScript SDK for creating and accessing encrypted signals in the MORSE platform.
 
-**Version:** 0.1.0-beta.6 (Beta Release)
+**Version:** 0.1.0-beta.12 (Beta Release)
 
 > ⚠️ **Beta Notice**: This is a beta release. The API is stable but may have minor changes before the 1.0.0 release. Please report any issues you encounter.
 

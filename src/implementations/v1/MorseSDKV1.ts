@@ -15,7 +15,6 @@ import type {
   MorseSDKConfig,
 } from "../../types";
 import { mapErrorResponse, NetworkError } from "../../errors";
-import { logger } from "../../logger";
 import { RateLimiter, RateLimitError } from "../../rate-limiter";
 import {
   generateKey,
@@ -32,10 +31,11 @@ import {
   createSharedSignal,
   verifyKeyCertificate,
   generateSignalId,
+  sealDataKey,
   type MorseKeyCert,
 } from "../../crypto-x25519";
 import { WalletKeyService } from "../../wallet-key-service";
-import { validateSignalId, validateWalletAddress } from "../../utils";
+import { validateSignalId, validateWalletAddress, normalizeSignalId } from "../../utils";
 
 const API_BASE_URL = "https://api.morseai.tech";
 const FRONTEND_BASE_URL = "https://morseai.tech";
@@ -69,13 +69,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       this.rateLimiter = new RateLimiter({ maxRequests, windowMs });
     }
 
-    logger.debug("MorseSDKV1 initialized", {
-      apiVersion: config.apiVersion || "v1",
-      timeout: this.timeout,
-      retries: this.retries,
-      rateLimitEnabled: this.rateLimiter !== null,
-      hasApiKey: !!config.apiKey,
-    });
   }
 
   private base64ToUint8Array(base64: string): Uint8Array {
@@ -174,10 +167,6 @@ export class MorseSDKV1 implements MorseContractV1 {
         await this.rateLimiter.checkLimit();
       } catch (error) {
         if (error instanceof RateLimitError) {
-          logger.warn("Rate limit exceeded", {
-            url,
-            retryAfterMs: error.retryAfterMs
-          });
           if (this.config.onError) {
             this.config.onError(error);
           }
@@ -187,11 +176,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       }
     }
 
-    logger.debug("Making request", {
-      url,
-      method: options.method || "GET",
-      hasBody: !!options.body,
-    });
 
     const requestOptions: RequestInit = {
       ...options,
@@ -232,12 +216,6 @@ export class MorseSDKV1 implements MorseContractV1 {
             message: `HTTP ${response.status}: ${response.statusText}`,
           }));
 
-          logger.error("Request failed", {
-            status: response.status,
-            code: error.code,
-            message: error.message,
-            attempt: attempt + 1,
-          });
 
           const mappedError = mapErrorResponse(error);
 
@@ -249,7 +227,6 @@ export class MorseSDKV1 implements MorseContractV1 {
         }
 
         const data = await response.json();
-        logger.debug("Request successful", { url, attempt: attempt + 1 });
         return data;
       } catch (error: any) {
         lastError = error;
@@ -264,7 +241,6 @@ export class MorseSDKV1 implements MorseContractV1 {
 
         if (error instanceof NetworkError || error.name?.includes("Error")) {
           if (attempt < this.retries) {
-            logger.warn(`Request failed, retrying... (${attempt + 1}/${this.retries})`, { url });
             await new Promise(resolve => setTimeout(resolve, this.retryDelay * (attempt + 1)));
             continue;
           }
@@ -277,7 +253,6 @@ export class MorseSDKV1 implements MorseContractV1 {
 
         if (error.message?.includes("fetch") || error.message?.includes("network")) {
           if (attempt < this.retries) {
-            logger.warn(`Network error, retrying... (${attempt + 1}/${this.retries})`, { url });
             await new Promise(resolve => setTimeout(resolve, this.retryDelay * (attempt + 1)));
             continue;
           }
@@ -324,12 +299,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       throw new Error("Either hasFile or hasMessage must be true");
     }
 
-    logger.info("Creating signal", {
-      hasFile: options.hasFile,
-      hasMessage: options.hasMessage,
-      mode: options.mode,
-    });
-
     const tempSignalId = "temp-" + Date.now();
     const authMessage = await this.createAuthMessage("create", `signal ${tempSignalId}`);
     const signature = await this.signMessage(wallet, authMessage);
@@ -351,7 +320,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       }
     );
 
-    logger.info("Signal created", { signalId: result.signalId });
     return result;
   }
 
@@ -359,10 +327,9 @@ export class MorseSDKV1 implements MorseContractV1 {
     wallet: WalletAuth,
     signalId: string
   ): Promise<OpenSignalResponse> {
+    signalId = normalizeSignalId(signalId);
     validateSignalId(signalId);
     validateWalletAddress(wallet.address);
-
-    logger.info("Opening signal", { signalId });
 
     const authMessage = await this.createAuthMessage("open", `signal ${signalId}`);
     const signature = await this.signMessage(wallet, authMessage);
@@ -384,7 +351,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       }
     );
 
-    logger.info("Signal opened", { signalId, hasFile: !!result.file });
     return result;
   }
 
@@ -393,12 +359,13 @@ export class MorseSDKV1 implements MorseContractV1 {
     signalId: string,
     keyBase64?: string
   ): Promise<OpenSignalResponseDecrypted> {
+    signalId = normalizeSignalId(signalId);
+    signalId = normalizeSignalId(signalId);
     validateSignalId(signalId);
     validateWalletAddress(wallet.address);
 
     const encryptedResponse = await this.openSignal(wallet, signalId);
 
-    // Check if this is an X25519 signal
     const isX25519Signal = Boolean(
       encryptedResponse.sealedDataKey &&
       encryptedResponse.sealedNonce &&
@@ -407,86 +374,179 @@ export class MorseSDKV1 implements MorseContractV1 {
 
     let message: string | null = null;
     let fileData: ArrayBuffer | null = null;
+    let fileName: string | null = null;
+    let fileMimeType: string | null = null;
     let keySource: "derived" | "provided" = "derived";
 
     if (isX25519Signal) {
-      // X25519 signal - decrypt using wallet
       const { openSharedSignal } = await import("../../crypto-x25519");
 
       const walletTarget = encryptedResponse.walletTarget || wallet.address;
       const walletCreator = encryptedResponse.walletCreator || wallet.address;
-      const expiresAtMs = new Date(encryptedResponse.expiresAt).getTime();
+      const expiresAtMs = Math.floor(new Date(encryptedResponse.expiresAt).getTime());
 
-      // Fetch domain and chainId from the recipient's certificate
+      const isPrivateSignal = walletTarget.toLowerCase() === walletCreator.toLowerCase();
+
       const keyService = new WalletKeyService(API_BASE_URL, this.config.apiKey, this.config.apiVersion || "v1");
-      const certResponse = await keyService.getPublicKey(wallet.address);
+      const certificateWallet = isPrivateSignal ? walletCreator : walletTarget;
+      const certResponse = await keyService.getPublicKey(certificateWallet);
 
-      const domain = certResponse.certificate?.domain || "morseai.tech";
-      const chainId = certResponse.certificate?.chainId || 1;
-
-      if (encryptedResponse.encryptedText && encryptedResponse.payloadNonce) {
-        const decryptedBytes = await openSharedSignal(
-          encryptedResponse.encryptedText,
-          encryptedResponse.payloadNonce,
-          encryptedResponse.sealedDataKey!,
-          encryptedResponse.sealedNonce!,
-          encryptedResponse.senderEphemeralPublicKey!,
-          signalId,
-          walletTarget,
-          walletCreator,
-          expiresAtMs,
-          encryptedResponse.aadHash || "",
-          wallet.address,
-          domain,
-          chainId,
-          wallet.signMessage
-        );
-        message = new TextDecoder().decode(decryptedBytes);
+      if (!certResponse.exists || !certResponse.certificate) {
+        if (isPrivateSignal) {
+          throw new Error(
+            `Certificate not found for creator ${walletCreator}. ` +
+            `The creator needs to publish their public key certificate first.`
+          );
+        } else {
+          throw new Error(
+            `Certificate not found for recipient ${walletTarget}. ` +
+            `The recipient needs to publish their public key certificate first. ` +
+            `They can do this by opening any shared signal sent to them, or visiting the app.`
+          );
+        }
       }
 
-      // Handle X25519 file decryption
+      const domain = certResponse.certificate.domain || "morseai.tech";
+      const chainId = certResponse.certificate.chainId ?? 1;
+
+      if (encryptedResponse.encryptedText && encryptedResponse.payloadNonce) {
+        const payloadNonceBytes = Buffer.from(encryptedResponse.payloadNonce, "base64");
+        const isAesGcm = payloadNonceBytes.length === 12;
+
+        if (isAesGcm) {
+          const { unsealDataKey } = await import("../../crypto-x25519");
+          const dataKeyBytes = await unsealDataKey(
+            encryptedResponse.sealedDataKey!,
+            encryptedResponse.sealedNonce!,
+            encryptedResponse.senderEphemeralPublicKey!,
+            signalId,
+            walletTarget,
+            walletCreator,
+            expiresAtMs,
+            encryptedResponse.aadHash || "",
+            wallet.address,
+            domain,
+            chainId,
+            wallet.signMessage
+          );
+
+          const keyBase64 = Buffer.from(dataKeyBytes).toString("base64");
+          const key = await importKey(keyBase64);
+          message = await decryptText(encryptedResponse.encryptedText, encryptedResponse.payloadNonce, key);
+        } else {
+          const decryptedBytes = await openSharedSignal(
+            encryptedResponse.encryptedText,
+            encryptedResponse.payloadNonce,
+            encryptedResponse.sealedDataKey!,
+            encryptedResponse.sealedNonce!,
+            encryptedResponse.senderEphemeralPublicKey!,
+            signalId,
+            walletTarget,
+            walletCreator,
+            expiresAtMs,
+            encryptedResponse.aadHash || "",
+            wallet.address,
+            domain,
+            chainId,
+            wallet.signMessage
+          );
+          message = new TextDecoder().decode(decryptedBytes);
+        }
+      }
+
       if (encryptedResponse.file) {
         const fileResponse = await this.downloadFile(wallet, signalId);
         const encryptedFileBase64 = fileResponse.file;
 
-        // Use file-specific sealed key data if available, otherwise fall back to signal-level data
         const fileSealedDataKey = encryptedResponse.file.sealedDataKey || encryptedResponse.sealedDataKey;
         const fileSealedNonce = encryptedResponse.file.sealedNonce || encryptedResponse.sealedNonce;
         const fileSenderEphemeralPublicKey = encryptedResponse.file.senderEphemeralPublicKey || encryptedResponse.senderEphemeralPublicKey;
         const fileAadHash = encryptedResponse.file.aadHash || encryptedResponse.aadHash || "";
 
         if (fileSealedDataKey && fileSealedNonce && fileSenderEphemeralPublicKey && encryptedResponse.file.payloadNonce) {
-          // File is encrypted with X25519
-          const decryptedFileBytes = await openSharedSignal(
-            encryptedFileBase64,
-            encryptedResponse.file.payloadNonce,
-            fileSealedDataKey,
-            fileSealedNonce,
-            fileSenderEphemeralPublicKey,
-            `${signalId}-file`, // Use hyphen like frontend
-            walletTarget.toLowerCase(),
-            walletCreator.toLowerCase(),
-            expiresAtMs,
-            fileAadHash,
-            wallet.address,
-            domain,
-            chainId,
-            wallet.signMessage
-          );
-          fileData = decryptedFileBytes.buffer.slice(
-            decryptedFileBytes.byteOffset,
-            decryptedFileBytes.byteOffset + decryptedFileBytes.byteLength
-          ) as ArrayBuffer;
+          if (isPrivateSignal) {
+            const { unsealDataKey } = await import("../../crypto-x25519");
+            const { decryptFile, importKey } = await import("../../crypto");
+
+            const creatorCertResponse = await keyService.getPublicKey(walletCreator);
+            if (!creatorCertResponse.exists || !creatorCertResponse.certificate) {
+              throw new Error("Creator's certificate not found. Cannot decrypt this signal.");
+            }
+            const creatorDomain = creatorCertResponse.certificate.domain || "morseai.tech";
+            const creatorChainId = creatorCertResponse.certificate.chainId ?? 1;
+
+            const dataKeyBytes = await unsealDataKey(
+              fileSealedDataKey,
+              fileSealedNonce,
+              fileSenderEphemeralPublicKey,
+              signalId, // Use main signalId, not signalId-file for private signals
+              walletTarget.toLowerCase(),
+              walletCreator.toLowerCase(),
+              expiresAtMs,
+              fileAadHash,
+              wallet.address,
+              creatorDomain,
+              creatorChainId,
+              wallet.signMessage
+            );
+
+            if (dataKeyBytes.length !== 32) {
+              throw new Error(`Invalid data key length: expected 32 bytes, got ${dataKeyBytes.length}`);
+            }
+            const keyArray = dataKeyBytes instanceof Uint8Array ? dataKeyBytes : new Uint8Array(dataKeyBytes);
+            const keyBase64 = btoa(String.fromCharCode(...keyArray));
+            const key = await importKey(keyBase64);
+
+            const encryptedFileBytes = Buffer.from(encryptedFileBase64, "base64");
+            const encryptedFileBuffer = encryptedFileBytes.buffer.slice(
+              encryptedFileBytes.byteOffset,
+              encryptedFileBytes.byteOffset + encryptedFileBytes.byteLength
+            ) as ArrayBuffer;
+            fileData = await decryptFile(encryptedFileBuffer, encryptedResponse.file.payloadNonce, key);
+            fileName = encryptedResponse.file.originalName || "file";
+            fileMimeType = encryptedResponse.file.mimeType || "application/octet-stream";
+          } else {
+            const fileCertResponse = await keyService.getPublicKey(walletTarget);
+            if (!fileCertResponse.exists || !fileCertResponse.certificate) {
+              throw new Error(
+                `Certificate not found for recipient ${walletTarget}. ` +
+                `The recipient needs to publish their public key certificate first.`
+              );
+            }
+            const fileDomain = fileCertResponse.certificate.domain || "morseai.tech";
+            const fileChainId = fileCertResponse.certificate.chainId ?? 1;
+            const fileWalletCreator = (encryptedResponse.walletCreator || "").toLowerCase();
+
+            const decryptedFileBytes = await openSharedSignal(
+              encryptedFileBase64,
+              encryptedResponse.file.payloadNonce,
+              fileSealedDataKey,
+              fileSealedNonce,
+              fileSenderEphemeralPublicKey,
+              `${signalId}-file`, // Use hyphen like frontend
+              walletTarget.toLowerCase(),
+              fileWalletCreator,
+              expiresAtMs,
+              fileAadHash,
+              wallet.address,
+              fileDomain,
+              fileChainId,
+              wallet.signMessage
+            );
+            fileData = decryptedFileBytes.buffer.slice(
+              decryptedFileBytes.byteOffset,
+              decryptedFileBytes.byteOffset + decryptedFileBytes.byteLength
+            ) as ArrayBuffer;
+            fileName = encryptedResponse.file.originalName || "file";
+            fileMimeType = encryptedResponse.file.mimeType || "application/octet-stream";
+          }
         } else {
-          // File is encrypted with AES-GCM (legacy or private signal)
-          // This shouldn't happen for X25519 signals, but handle it gracefully
           throw new Error("File encryption format not supported for this signal type");
         }
       }
 
       keySource = "derived";
     } else {
-      // AES-GCM signal - decrypt using provided key
       if (!keyBase64 || typeof keyBase64 !== 'string' || keyBase64.length < 32) {
         throw new Error("This signal requires an encryption key. Please provide the key from the URL fragment (#k=...).");
       }
@@ -512,11 +572,11 @@ export class MorseSDKV1 implements MorseContractV1 {
 
     return {
       message,
-      file: encryptedResponse.file && fileData
+      file: encryptedResponse.file && fileData && fileName && fileMimeType
         ? {
           data: fileData,
-          originalName: encryptedResponse.file.originalName,
-          mimeType: encryptedResponse.file.mimeType,
+          originalName: fileName,
+          mimeType: fileMimeType,
           sizeBytes: encryptedResponse.file.sizeBytes,
         }
         : null,
@@ -628,10 +688,8 @@ export class MorseSDKV1 implements MorseContractV1 {
   ): Promise<CreateSignalResponseEncrypted> {
     validateWalletAddress(wallet.address);
 
-    // SECURITY: shareWithRecipient is determined by mode - cannot be overridden
     const shareWithRecipient = options.mode === "shared_wallet";
 
-    // Validate mode consistency
     if (options.mode === "shared_wallet" && !options.walletTarget) {
       throw new Error("walletTarget is required when mode is 'shared_wallet'");
     }
@@ -644,7 +702,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       throw new Error("Either message or file must be provided");
     }
 
-    // Validate expiration - either expiresIn or expiresAt must be provided
     if (!options.expiresIn && !options.expiresAt) {
       throw new Error(
         "Either expiresIn or expiresAt must be provided.\n" +
@@ -657,18 +714,15 @@ export class MorseSDKV1 implements MorseContractV1 {
       throw new Error("Cannot provide both expiresIn and expiresAt. Use only one.");
     }
 
-    // Merge shareWithRecipient (determined by mode) into options
     const mergedOptions: CreateSignalOptionsEncrypted & { shareWithRecipient: boolean } = {
       ...options,
       shareWithRecipient,
     };
 
-    // For shared signals, use X25519 encryption
     if (shareWithRecipient && options.walletTarget) {
       return this.createSharedSignalEncrypted(wallet, mergedOptions);
     }
 
-    // For private signals, use simple AES-GCM with key in URL
     return this.createPrivateSignalEncrypted(wallet, mergedOptions);
   }
 
@@ -678,6 +732,90 @@ export class MorseSDKV1 implements MorseContractV1 {
   ): Promise<CreateSignalResponseEncrypted> {
     const key = await generateKey();
     const keyBase64 = await exportKey(key);
+
+    const signalId = options.signalId || generateSignalId();
+
+    let expiresAtMs: number;
+    if (options.expiresAt) {
+      expiresAtMs = new Date(options.expiresAt).getTime();
+    } else if (options.expiresIn) {
+      const match = options.expiresIn.match(/^(\d+)([smhd])$/);
+      if (!match) throw new Error("Invalid expiresIn format");
+      const value = parseInt(match[1], 10);
+      const unit = match[2];
+      const multipliers: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+      expiresAtMs = Date.now() + value * multipliers[unit];
+    } else {
+      expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
+    }
+
+    const walletTarget = wallet.address;
+    const walletCreator = wallet.address;
+
+    const keyService = new WalletKeyService(API_BASE_URL, this.config.apiKey, this.config.apiVersion || "v1");
+    const creatorKeyResponse = await keyService.getPublicKey(wallet.address);
+
+    let domain: string;
+    let chainId: number;
+    let creatorPubKey: Buffer;
+
+    if (creatorKeyResponse.exists && creatorKeyResponse.certificate) {
+      domain = creatorKeyResponse.certificate.domain || options.domain || "morseai.tech";
+      chainId = creatorKeyResponse.certificate.chainId ?? (options.chainId ?? 8453);
+      creatorPubKey = Buffer.from(creatorKeyResponse.certificate.x25519PublicKey, "base64");
+
+    } else {
+      domain = options.domain || "morseai.tech";
+      chainId = options.chainId ?? 8453;
+
+      const { deriveKeyPairFromWalletSignature, createKeyCertificate } = await import("../../crypto-x25519");
+      const creatorKeypair = await deriveKeyPairFromWalletSignature(
+        wallet.address,
+        domain,
+        chainId,
+        wallet.signMessage
+      );
+      const publicKeyBase64 = Buffer.from(creatorKeypair.publicKey).toString("base64");
+      creatorPubKey = Buffer.from(creatorKeypair.publicKey);
+      const expiresAtMsCert = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+      let signTypedDataFn: (domain: any, types: any, value: any) => Promise<string>;
+      if (wallet.signTypedData) {
+        signTypedDataFn = wallet.signTypedData;
+      } else {
+        throw new Error(
+          "signTypedData is required for publishing public key certificate. " +
+          "Please ensure your WalletAuth includes signTypedData. " +
+          "If using createWalletFromPrivateKey, update to the latest version of the SDK."
+        );
+      }
+
+      const certificate = await createKeyCertificate(
+        wallet.address,
+        publicKeyBase64,
+        domain,
+        chainId,
+        expiresAtMsCert,
+        signTypedDataFn
+      );
+      await keyService.publishPublicKey(certificate);
+    }
+
+    const keyBytes = this.base64ToUint8Array(keyBase64);
+
+    let sealedBox;
+    try {
+      sealedBox = await sealDataKey(
+        keyBytes,
+        walletTarget.toLowerCase(),
+        walletCreator.toLowerCase(),
+        expiresAtMs,
+        signalId,
+        new Uint8Array(creatorPubKey)
+      );
+    } catch (sealError: any) {
+      throw new Error(`Failed to seal encryption key: ${sealError.message || String(sealError)}`);
+    }
 
     let encryptedText: string | undefined;
     let payloadNonce: string | undefined;
@@ -710,6 +848,7 @@ export class MorseSDKV1 implements MorseContractV1 {
     }
 
     const signalOptions: CreateSignalOptions = {
+      signalId,
       walletTarget: options.walletTarget,
       shareWithRecipient: options.shareWithRecipient,
       mode: options.mode,
@@ -718,10 +857,13 @@ export class MorseSDKV1 implements MorseContractV1 {
       cipherVersion: getCipherVersion(),
       encryptedText,
       payloadNonce,
+      sealedDataKey: sealedBox.sealedDataKey,
+      sealedNonce: sealedBox.sealedNonce,
+      senderEphemeralPublicKey: sealedBox.senderEphemeralPublicKey,
+      aadHash: sealedBox.aadHash,
       file: fileOptions,
       onChainNotification: options.onChainNotification,
-      expiresAt: options.expiresAt,
-      expiresIn: options.expiresIn,
+      expiresAt: new Date(expiresAtMs).toISOString(),
     };
 
     const result = await this.createSignal(wallet, signalOptions);
@@ -761,8 +903,8 @@ export class MorseSDKV1 implements MorseContractV1 {
 
     if (!recipientKeyResponse.exists || !recipientKeyResponse.certificate) {
       throw new Error(
-        `Public key not found for recipient ${walletTarget}. ` +
-        `The recipient needs to publish their public key first. ` +
+        `Certificate not found for recipient ${walletTarget}. ` +
+        `The recipient needs to publish their public key certificate first. ` +
         `They can do this by opening any shared signal sent to them, or visiting the app.`
       );
     }
@@ -874,10 +1016,9 @@ export class MorseSDKV1 implements MorseContractV1 {
   }
 
   async burnSignal(wallet: WalletAuth, signalId: string): Promise<{ success: boolean }> {
+    signalId = normalizeSignalId(signalId);
     validateSignalId(signalId);
     validateWalletAddress(wallet.address);
-
-    logger.info("Burning signal", { signalId });
 
     const authMessage = await this.createAuthMessage("burn", `signal ${signalId}`);
     const signature = await this.signMessage(wallet, authMessage);
@@ -899,7 +1040,6 @@ export class MorseSDKV1 implements MorseContractV1 {
       }
     );
 
-    logger.info("Signal burned successfully", { signalId });
     return result;
   }
 }

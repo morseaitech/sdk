@@ -1,6 +1,6 @@
 {
   "name": "@morseai/sdk",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.12",
   "description": "MORSE SDK - TypeScript SDK for creating and accessing encrypted signals",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -51,7 +51,7 @@
     "url": "https://github.com/morseaitech/sdk/issues"
   },
   "dependencies": {
-    "ethers": "^6.0.0",
+    "ethers": "^5.7.2",
     "libsodium-wrappers": "^0.7.16"
   },
   "devDependencies": {
@@ -59,9 +59,6 @@
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.3"
-  },
-  "peerDependencies": {
-    "ethers": "^6.0.0"
   },
   "publishConfig": {
     "access": "public"

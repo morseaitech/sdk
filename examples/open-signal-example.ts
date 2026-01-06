@@ -2,9 +2,9 @@ import { MorseSDK, createWalletFromPrivateKey } from "../src";
 
 async function example() {
     // Get API key from environment variable
-    const apiKey = process.env.MORSE_API_KEY || "sk_your_api_key_here";
+    const apiKey = process.env.MORSE_API_KEY;
 
-    if (apiKey === "sk_your_api_key_here") {
+    if (!apiKey || apiKey === "sk_your_api_key_here") {
         console.error("\n❌ Please set MORSE_API_KEY environment variable");
         console.error("   export MORSE_API_KEY=sk_your_actual_api_key");
         return;

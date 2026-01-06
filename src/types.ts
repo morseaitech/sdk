@@ -80,6 +80,16 @@ export interface CreateSignalOptionsEncrypted {
     network: string;
   };
   /**
+   * Domain for key derivation (optional, defaults to "morseai.tech")
+   * Should match the domain used when opening the signal
+   */
+  domain?: string;
+  /**
+   * Chain ID for key derivation (optional, defaults to 8453 for Base)
+   * Should match the chain ID used when opening the signal
+   */
+  chainId?: number;
+  /**
    * Specific expiration date and time (ISO 8601 format).
    * Use this for custom expiration dates.
    * 
@@ -199,6 +209,7 @@ export interface SignalErrorResponse {
 export interface WalletAuth {
   address: string;
   signMessage: (message: string) => Promise<string>;
+  signTypedData?: (domain: any, types: any, value: any) => Promise<string>;
 }
 
 export interface RateLimitConfig {

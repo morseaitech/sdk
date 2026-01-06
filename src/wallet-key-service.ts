@@ -1,7 +1,7 @@
 /**
  * Wallet Key Registry Service
  * 
- * Fetches and publishes X25519 public keys from/to the backend registry
+ * Fetches and publishes X25519 public key certificates from/to the backend registry
  */
 
 import type { MorseKeyCert } from "./crypto-x25519";
@@ -46,7 +46,7 @@ export class WalletKeyService {
                     exists: false,
                 };
             }
-            throw new Error(`Failed to fetch public key: ${response.status} ${response.statusText}`);
+            throw new Error(`Failed to fetch certificate: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -71,7 +71,7 @@ export class WalletKeyService {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({ message: "Unknown error" }));
-            throw new Error(`Failed to publish public key: ${error.message || response.statusText}`);
+            throw new Error(`Failed to publish certificate: ${error.message || response.statusText}`);
         }
     }
 }

@@ -2,9 +2,9 @@ import { MorseSDK, createWalletFromPrivateKey, Expiration } from "../src";
 
 async function example() {
     // Get API key from environment variable
-    const apiKey = process.env.MORSE_API_KEY || "sk_your_api_key_here";
+    const apiKey = process.env.MORSE_API_KEY;
 
-    if (apiKey === "sk_your_api_key_here") {
+    if (!apiKey || apiKey === "sk_your_api_key_here") {
         console.error("\n❌ Please set MORSE_API_KEY environment variable");
         console.error("   export MORSE_API_KEY=sk_your_actual_api_key");
         return;
@@ -33,8 +33,15 @@ async function example() {
         console.log("\nCreating SHARED encrypted signal with X25519...");
 
         // Option 1: Use relative time (expiresIn)
+        const walletTarget = process.env.WALLET_TARGET;
+        if (!walletTarget) {
+            console.error("\n❌ Please set WALLET_TARGET environment variable");
+            console.error("   export WALLET_TARGET=0x...");
+            return;
+        }
+
         const result = await sdk.createSignalEncrypted(wallet, {
-            walletTarget: process.env.WALLET_TARGET || "0x0000000000000000000000000000000000000000",
+            walletTarget,
             mode: "shared_wallet",
             message: "Secret message shared with X25519! 🔐",
             expiresIn: Expiration.ONE_DAY, // "24h" - 24 hours from now
@@ -49,9 +56,14 @@ async function example() {
         // Option 2: Use specific date (expiresAt)
         // Uncomment to try:
         /*
+        const walletTarget2 = process.env.WALLET_TARGET;
+        if (!walletTarget2) {
+            console.error("\n❌ Please set WALLET_TARGET environment variable");
+            return;
+        }
         const customDate = new Date("2026-12-31T23:59:59.000Z");
         const result2 = await sdk.createSignalEncrypted(wallet, {
-            walletTarget: process.env.WALLET_TARGET || "0x0000000000000000000000000000000000000000",
+            walletTarget: walletTarget2,
             mode: "shared_wallet",
             message: "Secret message that expires on New Year's Eve! 🎉",
             expiresAt: customDate.toISOString(), // Specific date and time

@@ -40,6 +40,11 @@ export function createWalletFromPrivateKey(config: PrivateKeyWalletConfig): Wall
             const signature = await wallet.signMessage(message);
             return signature;
         },
+        signTypedData: async (domain: any, types: any, value: any) => {
+            const wallet = new Wallet(privateKey);
+            const signature = await wallet.signTypedData(domain, types, value);
+            return signature;
+        },
     };
 }
 
