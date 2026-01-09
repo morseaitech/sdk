@@ -777,7 +777,7 @@ export class MorseSDKV1 implements MorseContractV1 {
       );
       const publicKeyBase64 = Buffer.from(creatorKeypair.publicKey).toString("base64");
       creatorPubKey = Buffer.from(creatorKeypair.publicKey);
-      const expiresAtMsCert = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      const expiresAtMsCert = Date.now() + (2 * 365 * 24 * 60 * 60 * 1000); // 2 years
 
       let signTypedDataFn: (domain: any, types: any, value: any) => Promise<string>;
       if (wallet.signTypedData) {
