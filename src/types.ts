@@ -233,3 +233,40 @@ export interface MorseSDKConfig {
 export interface MorseSDKConfigV1 extends MorseSDKConfig {
   apiVersion?: "v1";
 }
+
+// Onetime Signal Types
+export interface CreateOnetimeSignalOptions {
+  linkId?: string; // Optional: if not provided, will be auto-generated (UUID)
+  message?: string;
+  file?: {
+    data: ArrayBuffer | Uint8Array | Buffer;
+    originalName: string;
+    mimeType: string;
+  };
+  password?: string; // Optional passphrase for additional protection
+  expiresAt?: string; // ISO 8601 format
+  expiresIn?: string; // e.g., "1h", "24h", "7d"
+}
+
+export interface CreateOnetimeSignalResponse {
+  linkId: string;
+  shareableLink: string;
+  expiresAt: string;
+  password?: string; // Only returned if password was provided (for user to share separately)
+}
+
+export interface OpenOnetimeSignalOptions {
+  linkId: string;
+  password?: string; // Required if signal has password protection
+}
+
+export interface OpenOnetimeSignalResponse {
+  message: string | null;
+  file: {
+    data: ArrayBuffer;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+  } | null;
+  expiresAt: string;
+}

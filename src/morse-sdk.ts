@@ -11,6 +11,10 @@ import type {
     DownloadFileResponse,
     WalletAuth,
     MorseSDKConfig,
+    CreateOnetimeSignalOptions,
+    CreateOnetimeSignalResponse,
+    OpenOnetimeSignalOptions,
+    OpenOnetimeSignalResponse,
 } from "./types";
 import type { MorseContract } from "./contracts/MorseContract";
 import { MorseSDKV1 } from "./implementations/v1/MorseSDKV1";
@@ -139,6 +143,27 @@ export class MorseSDK implements MorseContract {
             return v1Contract.downloadFileDecrypted(wallet, signalId, keyBase64);
         }
         throw new Error("downloadFileDecrypted is not available in this API version");
+    }
+
+    async createOnetimeSignal(
+        wallet: WalletAuth,
+        options: CreateOnetimeSignalOptions
+    ): Promise<CreateOnetimeSignalResponse> {
+        const v1Contract = this.contract as any;
+        if (v1Contract.createOnetimeSignal) {
+            return v1Contract.createOnetimeSignal(wallet, options);
+        }
+        throw new Error("createOnetimeSignal is not available in this API version");
+    }
+
+    async openOnetimeSignal(
+        options: OpenOnetimeSignalOptions
+    ): Promise<OpenOnetimeSignalResponse> {
+        const v1Contract = this.contract as any;
+        if (v1Contract.openOnetimeSignal) {
+            return v1Contract.openOnetimeSignal(options);
+        }
+        throw new Error("openOnetimeSignal is not available in this API version");
     }
 }
 

@@ -11,6 +11,10 @@ import type {
     UploadFileResponse,
     DownloadFileResponse,
     WalletAuth,
+    CreateOnetimeSignalOptions,
+    CreateOnetimeSignalResponse,
+    OpenOnetimeSignalOptions,
+    OpenOnetimeSignalResponse,
 } from "../../types";
 
 export interface MorseContractV1 extends MorseContract {
@@ -26,5 +30,7 @@ export interface MorseContractV1 extends MorseContract {
     downloadFile(wallet: WalletAuth, signalId: string): Promise<DownloadFileResponse>;
     downloadFileDecrypted(wallet: WalletAuth, signalId: string, keyBase64: string): Promise<{ data: ArrayBuffer; originalName: string; mimeType: string; sizeBytes: number }>;
     burnSignal(wallet: WalletAuth, signalId: string): Promise<{ success: boolean }>;
+    createOnetimeSignal(wallet: WalletAuth, options: CreateOnetimeSignalOptions): Promise<CreateOnetimeSignalResponse>;
+    openOnetimeSignal(options: OpenOnetimeSignalOptions): Promise<OpenOnetimeSignalResponse>;
 }
 

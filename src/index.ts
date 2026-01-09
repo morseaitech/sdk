@@ -26,6 +26,13 @@ export {
     generateShareableLink,
 } from "./crypto";
 export {
+    encryptOnetimeText,
+    decryptOnetimeText,
+    encryptOnetimeFile,
+    decryptOnetimeFile,
+    hashOnetimePassword,
+} from "./onetimeSignal.crypto";
+export {
     X25519_CIPHER_VERSION,
     createSharedSignal,
     openSharedSignal,

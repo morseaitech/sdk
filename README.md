@@ -6,7 +6,7 @@
 
 TypeScript SDK for creating and accessing encrypted signals in the MORSE platform.
 
-**Version:** 0.1.0-beta.12 (Beta Release)
+**Version:** 0.1.0-beta.13 (Beta Release)
 
 > ⚠️ **Beta Notice**: This is a beta release. The API is stable but may have minor changes before the 1.0.0 release. Please report any issues you encounter.
 
@@ -399,6 +399,7 @@ See the `examples/` directory for complete working examples:
 
 - `create-signal-example.ts` - Creating signals
 - `open-signal-example.ts` - Opening and decrypting signals
+- `onetime-signal-example.ts` - Creating and opening Onetime Signals (one-time use links)
 - `backend-to-backend.ts` - Backend-to-backend communication
 - `browser-example.ts` - Browser/Web3 wallet usage
 - `custom-expiration-example.ts` - Custom expiration dates
@@ -414,6 +415,7 @@ export PRIVATE_KEY=your_private_key_hex
 # Run examples
 npx tsx examples/create-signal-example.ts
 npx tsx examples/open-signal-example.ts <signalId>
+npx tsx examples/onetime-signal-example.ts
 ```
 
 ## API Reference
@@ -546,6 +548,75 @@ import type {
 
 import { Expiration } from "@morseai/sdk";
 ```
+
+## Onetime Signals
+
+Onetime Signals are one-time use links that burn after first access. They don't require wallet authentication to open, making them perfect for sharing with anyone.
+
+### Creating Onetime Signals
+
+```typescript
+// Create a simple Onetime Signal with message
+const result = await sdk.createOnetimeSignal(wallet, {
+  message: "Secret message that will be deleted after first view!",
+  expiresIn: "24h", // or Expiration.ONE_DAY
+});
+
+console.log("Shareable link:", result.shareableLink);
+// https://morseai.tech/open-link/abc-123-def
+
+// Create with password protection
+const protected = await sdk.createOnetimeSignal(wallet, {
+  message: "Password-protected message",
+  password: "my-secret-passphrase",
+  expiresIn: "7d",
+});
+
+console.log("Link:", protected.shareableLink);
+console.log("Password:", protected.password); // Share separately!
+
+// Create with file
+const fileSignal = await sdk.createOnetimeSignal(wallet, {
+  file: {
+    data: fileArrayBuffer,
+    originalName: "document.pdf",
+    mimeType: "application/pdf",
+  },
+  password: "file-passphrase",
+  expiresIn: "1h",
+});
+```
+
+### Opening Onetime Signals
+
+**No wallet authentication required!** Anyone with the link can open it.
+
+```typescript
+// Open without password
+const opened = await sdk.openOnetimeSignal({
+  linkId: "abc-123-def", // Extract from URL
+});
+
+console.log("Message:", opened.message);
+console.log("File:", opened.file);
+
+// Open with password
+const protectedOpened = await sdk.openOnetimeSignal({
+  linkId: "xyz-789-ghi",
+  password: "my-secret-passphrase",
+});
+
+// Note: Signal is burned after opening - can't be opened again!
+```
+
+### Key Features
+
+- ✅ **One-time use** - Burns after first access
+- ✅ **No wallet required** - Anyone with link can open
+- ✅ **Password protection** - Optional passphrase
+- ✅ **File support** - Share encrypted files
+- ✅ **Auto-expiration** - Set custom expiration dates
+- ✅ **Zero-knowledge** - All encryption happens client-side
 
 ## Helper Functions
 

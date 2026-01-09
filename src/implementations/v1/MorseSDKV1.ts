@@ -13,6 +13,10 @@ import type {
   WalletAuth,
   SignalErrorResponse,
   MorseSDKConfig,
+  CreateOnetimeSignalOptions,
+  CreateOnetimeSignalResponse,
+  OpenOnetimeSignalOptions,
+  OpenOnetimeSignalResponse,
 } from "../../types";
 import { mapErrorResponse, NetworkError } from "../../errors";
 import { RateLimiter, RateLimitError } from "../../rate-limiter";
@@ -27,6 +31,13 @@ import {
   getCipherVersion,
   generateShareableLink,
 } from "../../crypto";
+import {
+  encryptOnetimeText,
+  encryptOnetimeFile,
+  decryptOnetimeText,
+  decryptOnetimeFile,
+  hashOnetimePassword,
+} from "../../onetimeSignal.crypto";
 import {
   createSharedSignal,
   verifyKeyCertificate,
@@ -1041,6 +1052,201 @@ export class MorseSDKV1 implements MorseContractV1 {
     );
 
     return result;
+  }
+
+  async createOnetimeSignal(
+    wallet: WalletAuth,
+    options: CreateOnetimeSignalOptions
+  ): Promise<CreateOnetimeSignalResponse> {
+    validateWalletAddress(wallet.address);
+
+    if (!options.message && !options.file) {
+      throw new Error("Either message or file must be provided");
+    }
+
+    const linkId = options.linkId || (() => {
+      let crypto: Crypto;
+      if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+        crypto = globalThis.crypto;
+      } else if (typeof window !== 'undefined' && window.crypto) {
+        crypto = window.crypto;
+      } else {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+
+      if (crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      // Fallback UUID generation
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    })();
+
+    // Encrypt message if provided
+    let encryptedText: string | undefined;
+    let encryptedTextIV: string | undefined;
+    if (options.message) {
+      const encrypted = await encryptOnetimeText(options.message, linkId, options.password);
+      encryptedText = encrypted.encrypted;
+      encryptedTextIV = encrypted.iv;
+    }
+
+    // Encrypt file if provided
+    let encryptedFile: {
+      data: string;
+      iv: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+    } | undefined;
+    if (options.file) {
+      const encrypted = await encryptOnetimeFile(
+        options.file.data,
+        linkId,
+        options.password
+      );
+      const encryptedBase64 = this.arrayBufferToBase64(encrypted.encrypted);
+      let sizeBytes: number;
+      const fileData = options.file.data;
+      if (fileData instanceof ArrayBuffer) {
+        sizeBytes = fileData.byteLength;
+      } else if (fileData instanceof Uint8Array) {
+        sizeBytes = fileData.length;
+      } else {
+        // Buffer type
+        sizeBytes = (fileData as Buffer).length;
+      }
+
+      encryptedFile = {
+        data: encryptedBase64,
+        iv: encrypted.iv,
+        originalName: options.file.originalName,
+        mimeType: options.file.mimeType,
+        sizeBytes,
+      };
+    }
+
+    // Hash password if provided
+    let passwordHash: string | undefined;
+    if (options.password) {
+      passwordHash = await hashOnetimePassword(options.password);
+    }
+
+    // Create auth message
+    const authMessage = await this.createAuthMessage("create", `onetime-signal ${linkId}`);
+    const signature = await this.signMessage(wallet, authMessage);
+
+    const requestBody = {
+      linkId,
+      encryptedText,
+      encryptedTextIV,
+      encryptedFile,
+      passwordHash,
+      expiresAt: options.expiresAt,
+      expiresIn: options.expiresIn,
+      wallet: {
+        address: wallet.address,
+        signature,
+        message: authMessage,
+      },
+    };
+
+    const result = await this.makeRequest<{ linkId: string; expiresAt: string }>(
+      this.getApiUrl("/onetime-signals"),
+      {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    // Generate shareable link
+    const shareableLink = `${FRONTEND_BASE_URL}/open-link/${result.linkId}`;
+
+    return {
+      linkId: result.linkId,
+      shareableLink,
+      expiresAt: result.expiresAt,
+      password: options.password, // Return password so user can share it separately
+    };
+  }
+
+  async openOnetimeSignal(
+    options: OpenOnetimeSignalOptions
+  ): Promise<OpenOnetimeSignalResponse> {
+    if (!options.linkId) {
+      throw new Error("linkId is required");
+    }
+
+    const queryParams = new URLSearchParams();
+    if (options.password) {
+      queryParams.append("password", options.password);
+    }
+    const queryString = queryParams.toString();
+    const url = `${this.getApiUrl("/onetime-signals")}/${options.linkId}${queryString ? `?${queryString}` : ""}`;
+
+    const result = await this.makeRequest<{
+      encryptedText?: string;
+      encryptedTextIV?: string;
+      encryptedFile?: {
+        data: string;
+        iv: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+      };
+      hasPassword: boolean;
+    }>(url, {
+      method: "GET",
+    });
+
+    let message: string | null = null;
+    if (result.encryptedText && result.encryptedTextIV) {
+      message = await decryptOnetimeText(
+        result.encryptedText,
+        result.encryptedTextIV,
+        options.linkId,
+        options.password
+      );
+    }
+
+    let file: {
+      data: ArrayBuffer;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+    } | null = null;
+    if (result.encryptedFile) {
+      const encryptedUint8 = this.base64ToUint8Array(result.encryptedFile.data);
+      const encryptedData = encryptedUint8.buffer.slice(
+        encryptedUint8.byteOffset,
+        encryptedUint8.byteOffset + encryptedUint8.byteLength
+      ) as ArrayBuffer;
+      const decryptedData = await decryptOnetimeFile(
+        encryptedData,
+        result.encryptedFile.iv,
+        options.linkId,
+        options.password
+      );
+      file = {
+        data: decryptedData,
+        originalName: result.encryptedFile.originalName,
+        mimeType: result.encryptedFile.mimeType,
+        sizeBytes: result.encryptedFile.sizeBytes,
+      };
+    }
+
+    return {
+      message,
+      file,
+      expiresAt: new Date().toISOString()
+    };
   }
 }
 
